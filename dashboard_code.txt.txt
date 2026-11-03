@@ -1,0 +1,106 @@
+import streamlit as st
+import pandas as pd
+import joblib
+import os
+
+st.set_page_config(
+    page_title="Air Pollution Prediction System",
+    page_icon="🌿",
+    layout="wide"
+)
+
+st.title("🌿 Air Pollution Prediction System")
+st.write("### India Air Quality Monitoring & Prediction Dashboard")
+st.write("Enter pollutant measurements to estimate the Air Quality Index (AQI).")
+
+MODEL_PATH = "air_quality_model.pkl"
+DATA_PATH = "city_day.csv"
+
+if not os.path.exists(MODEL_PATH):
+    st.error("Model file not found. Check your project folder.")
+    st.stop()
+
+model = joblib.load(MODEL_PATH)
+
+if os.path.exists(DATA_PATH):
+    df = pd.read_csv(DATA_PATH)
+
+    st.subheader("📊 Dataset Overview")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Total Records", f"{len(df):,}")
+    col2.metric("Cities Covered", df["City"].nunique())
+    col3.metric("Pollutants Tracked", 13)
+
+    st.subheader("🏙️ Explore Indian Cities")
+    cities = sorted(df["City"].dropna().unique())
+    selected_city = st.selectbox("Select a city", cities)
+
+    city_data = df[df["City"] == selected_city].copy()
+    city_data["Date"] = pd.to_datetime(city_data["Date"])
+    city_data = city_data.sort_values("Date")
+
+    st.line_chart(
+        city_data.set_index("Date")[["AQI"]].dropna()
+    )
+    st.caption("Historical AQI measurements from the dataset.")
+else:
+    st.warning("Dataset file city_day.csv was not found.")
+
+st.divider()
+st.subheader("🔮 Predict Air Quality Index")
+st.write("Enter pollutant concentrations using the dataset's units.")
+
+with st.form("prediction_form"):
+    col1, col2 = st.columns(2)
+
+    with col1:
+        pm25 = st.number_input(
+            "PM2.5 concentration",
+            min_value=0.0, max_value=1000.0, value=50.0
+        )
+        pm10 = st.number_input(
+            "PM10 concentration",
+            min_value=0.0, max_value=1000.0, value=80.0
+        )
+
+    with col2:
+        no2 = st.number_input(
+            "NO2 concentration",
+            min_value=0.0, max_value=500.0, value=30.0
+        )
+        co = st.number_input(
+            "CO concentration",
+            min_value=0.0, max_value=100.0, value=1.0
+        )
+
+    submitted = st.form_submit_button("Predict AQI")
+
+if submitted:
+    input_data = pd.DataFrame(
+        [[pm25, pm10, no2, co]],
+        columns=["PM2.5", "PM10", "NO2", "CO"]
+    )
+
+    prediction = float(model.predict(input_data)[0])
+
+    st.subheader("Prediction Result")
+    st.metric("Estimated AQI", f"{prediction:.1f}")
+
+    if prediction <= 50:
+        category = "Good"
+    elif prediction <= 100:
+        category = "Satisfactory"
+    elif prediction <= 200:
+        category = "Moderate"
+    elif prediction <= 300:
+        category = "Poor"
+    elif prediction <= 400:
+        category = "Very Poor"
+    else:
+        category = "Severe"
+
+    st.write(f"**Indicative category:** {category}")
+    st.caption(
+        "This is a machine-learning estimate, not an official AQI reading. "
+        "Results depend on the input measurements and training data."
+    )
